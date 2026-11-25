@@ -72,7 +72,7 @@
 
 ## 📋 Prasyarat
 
-* **Python 3.10 atau lebih baru** (`python --version`) — *murni menggunakan Python, tidak memerlukan Node.js / `npm`*.
+* **Windows 10 / 11** *(Jika di laptop belum ada Python, **`install.bat` akan otomatis mengunduh & memasangkan Python 3.12 resmi** untuk Anda — tidak perlu install manual dan tidak memerlukan Node.js / `npm`!).*
 * Terhubung ke jaringan LAN kantor atau VPN yang dapat mengakses server **`9router`**.
 
 ---

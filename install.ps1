@@ -7,28 +7,109 @@ Write-Host "    Powered By Dennis Hilmansyah - Agentic Coding CLI   " -Foregroun
 Write-Host "  ======================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Cek instalasi Python (>= 3.10)
-$pythonCmd = $null
-foreach ($candidate in @("python", "py")) {
-    try {
-        $cmdArgs = if ($candidate -eq "py") { @("-3", "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}'); sys.exit(0 if sys.version_info >= (3,10) else 1)") } else { @("-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}'); sys.exit(0 if sys.version_info >= (3,10) else 1)") }
-        $ver = & $candidate @cmdArgs 2>$null
-        if ($LASTEXITCODE -eq 0 -and $ver) {
-            $pythonCmd = $candidate
-            Write-Host "  [OK] Python $ver terdeteksi ($candidate)" -ForegroundColor Green
-            break
-        }
-    } catch {}
+function Refresh-SessionPath {
+    $mPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $uPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$mPath;$uPath"
 }
 
-if (-not $pythonCmd) {
-    Write-Host "  [X] Python 3.10+ belum terdeteksi di laptop ini!" -ForegroundColor Red
-    Write-Host "      Silakan install Python terlebih dahulu dari https://www.python.org/downloads/" -ForegroundColor Yellow
-    Write-Host "      (Pastikan centang 'Add Python to PATH' saat install)." -ForegroundColor Yellow
-    Write-Host ""
+function Find-ValidPython {
+    Refresh-SessionPath
+    $checkCode = "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}'); sys.exit(0 if sys.version_info >= (3,10) else 1)"
+
+    # Cek via command PATH (python / py -3)
+    foreach ($candidate in @("python", "py")) {
+        try {
+            $extra = if ($candidate -eq "py") { @("-3") } else { @() }
+            $ver = & $candidate @extra -c $checkCode 2>$null
+            if ($LASTEXITCODE -eq 0 -and $ver) {
+                return @{ Exe = $candidate; PrefixArgs = $extra; Version = ($ver | Select-Object -Last 1).Trim() }
+            }
+        } catch {}
+    }
+
+    # Cek lokasi standar instalasi Python Windows di disk
+    $diskCandidates = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "C:\Python313\python.exe",
+        "C:\Python312\python.exe",
+        "C:\Python311\python.exe",
+        "C:\Python310\python.exe",
+        "$env:ProgramFiles\Python312\python.exe"
+    )
+    foreach ($exePath in $diskCandidates) {
+        if (Test-Path $exePath) {
+            try {
+                $ver = & $exePath -c $checkCode 2>$null
+                if ($LASTEXITCODE -eq 0 -and $ver) {
+                    return @{ Exe = $exePath; PrefixArgs = @(); Version = ($ver | Select-Object -Last 1).Trim() }
+                }
+            } catch {}
+        }
+    }
+    return $null
+}
+
+function Install-PythonAutomatically {
+    Write-Host "  [!] Python 3.10+ belum ditemukan di laptop ini." -ForegroundColor Yellow
+    $ans = Read-Host "  Apakah Anda ingin menginstal Python 3.12 resmi secara otomatis sekarang? (Y/N) [Enter = Y]"
+    if ($ans -and $ans.Trim().ToUpper() -ne "Y") {
+        Write-Host "  [X] Instalasi dibatalkan oleh pengguna." -ForegroundColor Red
+        exit 1
+    }
+
+    # Opsi Utama: Gunakan winget bawaan Windows 10/11 (User scope, tidak butuh Administrator)
+    $hasWinget = $false
+    try {
+        $null = Get-Command winget -ErrorAction Stop
+        $hasWinget = $true
+    } catch {}
+
+    if ($hasWinget) {
+        Write-Host "  [*] Menginstal Python 3.12 otomatis melalui Windows Package Manager (winget)..." -ForegroundColor Cyan
+        try {
+            & winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
+        } catch {}
+    }
+
+    $found = Find-ValidPython
+    if ($found) { return $found }
+
+    # Fallback Otomatis: Unduh installer resmi langsung dari python.org jika winget gagal/belum ada
+    Write-Host "  [*] Mengunduh installer resmi Python 3.12.8 langsung dari python.org..." -ForegroundColor Cyan
+    $pyUrl = "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+    $tmpInstaller = Join-Path $env:TEMP "python-3.12.8-amd64-bidik.exe"
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $pyUrl -OutFile $tmpInstaller -UseBasicParsing
+
+    Write-Host "  [*] Memasang Python 3.12 (User Mode + Auto PATH, mohon tunggu sekitar 1 menit)..." -ForegroundColor Cyan
+    $proc = Start-Process -FilePath $tmpInstaller -ArgumentList "/passive InstallAllUsers=0 PrependPath=1 Include_test=0" -Wait -PassThru
+    Remove-Item -Force $tmpInstaller -ErrorAction SilentlyContinue
+
+    if ($proc.ExitCode -ne 0) {
+        throw "Installer Python selesai dengan kode status $($proc.ExitCode)."
+    }
+
+    return (Find-ValidPython)
+}
+
+# 1. Cek instalasi Python (dan tawarkan auto-install jika belum ada!)
+$pyInfo = Find-ValidPython
+if (-not $pyInfo) {
+    $pyInfo = Install-PythonAutomatically
+}
+
+if (-not $pyInfo) {
+    Write-Host "  [X] Python belum berhasil dideteksi setelah instalasi. Silakan tutup dan jalankan ulang install.bat." -ForegroundColor Red
     Read-Host "  Tekan Enter untuk menutup"
     exit 1
 }
+
+Write-Host "  [OK] Python $($pyInfo.Version) siap digunakan ($($pyInfo.Exe))" -ForegroundColor Green
 
 $sourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $installDir = Join-Path $HOME ".bidik-cli"
@@ -43,11 +124,15 @@ if ($sourceDir.TrimEnd('\') -ne $installDir.TrimEnd('\')) {
     New-Item -ItemType Directory -Force -Path (Join-Path $installDir "bidik_cli") | Out-Null
 
     Copy-Item -Force (Join-Path $sourceDir "pyproject.toml") $installDir
-    if (Test-Path (Join-Path $sourceDir "README.md")) {
-        Copy-Item -Force (Join-Path $sourceDir "README.md") $installDir
+    foreach ($optFile in @("README.md", "install.bat", "install.ps1", "uninstall.bat")) {
+        $srcFile = Join-Path $sourceDir $optFile
+        if (Test-Path $srcFile) {
+            Copy-Item -Force $srcFile $installDir
+        }
     }
-    if (Test-Path (Join-Path $sourceDir "uninstall.bat")) {
-        Copy-Item -Force (Join-Path $sourceDir "uninstall.bat") $installDir
+    if (Test-Path (Join-Path $sourceDir "assets")) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $installDir "assets") | Out-Null
+        Copy-Item -Force (Join-Path $sourceDir "assets\*") (Join-Path $installDir "assets")
     }
     Copy-Item -Force (Join-Path $sourceDir "bidik_cli\*.py") (Join-Path $installDir "bidik_cli")
     Write-Host "  [OK] File program berhasil disalin." -ForegroundColor Green
@@ -60,11 +145,9 @@ $venvPip = Join-Path $venvDir "Scripts\pip.exe"
 
 if (-not (Test-Path $venvPy)) {
     Write-Host "  [*] Membuat virtual environment terisolasi (.venv)..." -ForegroundColor Cyan
-    if ($pythonCmd -eq "py") {
-        & py -3 -m venv $venvDir
-    } else {
-        & python -m venv $venvDir
-    }
+    $pyExe = $pyInfo.Exe
+    $pyArgs = @() + $pyInfo.PrefixArgs + @("-m", "venv", $venvDir)
+    & $pyExe @pyArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Gagal membuat virtual environment di $venvDir"
     }
