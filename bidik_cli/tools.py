@@ -13,41 +13,44 @@ from typing import Any
 from .completer import IGNORED_DIRS
 from .ui import ask_approval, console, render_diff
 
-# Pola perintah berbahaya yang selalu diblokir keras demi keamanan laptop user
+# Hanya perintah perusak fatal OS (format disk / hapus C:\Windows) yang diblokir mati.
+# Aksi lainnya tetap BISA dijalankan selama diizinkan pengguna lewat konfirmasi YES / NO!
 BLOCKED_COMMAND_PATTERNS = [
     r"\bformat\s+[a-z]:",
     r"\bdel\s+/[sqf].*c:\\windows",
-    r"\brm\s+-rf\s+/\b",
-    r"\bshutdown\b",
-    r"\brestart-computer\b",
-    r"\bstop-computer\b",
+    r"\brm\s+-rf\s+[/\\]\s*$",
     r"\bdiskpart\b",
     r"\bbcdedit\b",
-    r"\breg\s+delete\s+hklm",
+    r"\bcipher\s+/w",
 ]
 
-# Folder sistem kritis yang tidak boleh ditulis/dimodifikasi dalam kondisi apa pun
+# Perintah sensitif (hapus file / ubah setting PC / restart) -> BISA, tapi WAJIB tanya YES/NO manual (tidak boleh Auto)
+HIGH_RISK_COMMAND_PATTERNS = [
+    r"\b(remove-item|ri|rm|rmdir|del|erase|rd)\b",
+    r"\bgit\s+(reset\s+--hard|clean\s+-f)",
+    r"\b(invoke-expression|iex)\b",
+    r"-encodedcommand\b",
+    r"\breg\s+(add|delete|import)\b",
+    r"\b(setx|setenvironmentvariable|set-executionpolicy|netsh|schtasks)\b",
+    r"\b(shutdown|restart-computer|stop-computer|stop-service)\b",
+]
+
+# Hanya inti kernel/OS Windows yang dilarang ditimpa langsung agar Windows tidak rusak/bootloop
 HARD_BLOCKED_WRITE_PREFIXES = [
-    "c:\\windows",
-    "c:\\program files",
-    "c:\\program files (x86)",
-    "c:\\programdata",
-    "/etc",
-    "/bin",
-    "/sbin",
-    "/usr",
+    "c:\\windows\\system32",
+    "c:\\windows\\syswow64",
+    "c:\\windows\\boot",
 ]
 
-# Nama folder atau pola file sensitif (kredensial/rahasia) yang selalu meminta izin Yes/No
+# Nama folder atau pola file sensitif yang akan memunculkan konfirmasi YES/NO sebelum diakses/diedit
 SENSITIVE_FOLDER_NAMES = {
     ".ssh",
     ".aws",
     ".azure",
     ".gnupg",
     ".kube",
-    ".bidik",
-    ".docker",
     "appdata",
+    "startup",
 }
 
 SENSITIVE_FILE_PATTERNS = [
@@ -62,6 +65,8 @@ SENSITIVE_FILE_PATTERNS = [
     "id_ed25519*",
     "*credentials*",
     "*secret*",
+    ".gitconfig",
+    "microsoft.powershell_profile.ps1",
 ]
 
 
@@ -135,6 +140,17 @@ def get_tool_schemas(read_only: bool = False) -> list[dict[str, Any]]:
                         },
                     },
                     "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_pc_health",
+                "description": "Cek kondisi kesehatan & performa PC/laptop pengguna (CPU, penggunaan RAM, sisa ruang Disk, Uptime, dan Top 12 proses/aplikasi paling berat penyebab lemot).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
                 },
             },
         },
@@ -274,15 +290,15 @@ class ToolExecutor:
 
         norm_lower = str(candidate).lower()
 
-        # 1. Blokir keras penulisan ke folder inti sistem operasi
+        # 1. Blokir keras HANYA penulisan ke inti kernel Windows (System32/Boot) agar OS tidak rusak fatal
         if for_write:
             for sys_prefix in HARD_BLOCKED_WRITE_PREFIXES:
                 if norm_lower.startswith(sys_prefix):
                     raise PermissionError(
-                        f"DIBLOKIR SISTEM: AI dilarang keras mengubah file di dalam folder sistem operasi ({candidate})."
+                        f"DIBLOKIR SISTEM: File inti kernel Windows tidak boleh ditimpa ({candidate})."
                     )
 
-        # 2. Cek apakah berada di luar batas folder kerja proyek (Out-of-Workspace)
+        # 2. Cek apakah berada di luar batas folder kerja proyek (Out-of-Workspace) -> Tanya YES / NO!
         inside_workspace = True
         try:
             candidate.relative_to(self.workspace)
@@ -290,40 +306,40 @@ class ToolExecutor:
             inside_workspace = False
 
         if not inside_workspace:
+            ext_folder = candidate if candidate.is_dir() else candidate.parent
             if for_write:
                 decision = ask_approval(
-                    action_title=f"{action_desc} di LUAR Folder Proyek",
+                    action_title=f"{action_desc} di Luar Folder Kerja Saat Ini",
                     detail=str(candidate),
                     explanation=(
-                        f"AI meminta izin mengubah file di luar batas folder kerja proyek Anda (`{self.workspace}`). "
-                        "Demi keamanan laptop, tolak (NO) jika Anda tidak mengharapkan perubahan di lokasi tersebut."
+                        f"AI ingin mengedit/menulis file di folder `{ext_folder}` (di luar `{self.workspace}`). "
+                        "Pilih YES jika Anda mengizinkan perubahan di folder tersebut, atau NO untuk menolak."
                     ),
                     allow_always=False,
                     warning_level="high",
                 )
                 if decision != "allow":
-                    console.print(f"  [yellow]🛡 Akses penulisan ke luar workspace ditolak: {candidate}[/yellow]")
+                    console.print(f"  [yellow]🛡 Penulisan ke folder luar ditolak: {candidate}[/yellow]")
                     raise PermissionError(
-                        f"Ditolak oleh pengguna: AI tidak diizinkan menulis di luar workspace ({candidate})."
+                        f"Ditolak oleh pengguna: Penulisan di luar workspace ({candidate}) tidak diizinkan."
                     )
             elif not self._is_within_allowed_external(candidate):
-                ext_folder = candidate if candidate.is_dir() else candidate.parent
                 decision = ask_approval(
-                    action_title=f"{action_desc} di LUAR Folder Proyek",
+                    action_title=f"{action_desc} ke Folder Lain",
                     detail=str(candidate),
                     explanation=(
-                        f"AI ingin mengakses folder/file yang berada di luar batas proyek aktif Anda (`{self.workspace}`). "
-                        "Pilih YES hanya jika folder tersebut memang boleh dibaca oleh AI."
+                        f"AI ingin masuk/membaca folder `{ext_folder}` yang berada di luar folder aktif `{self.workspace}`. "
+                        "Pilih YES untuk mengizinkan AI mengecek folder tersebut, atau NO untuk menolak."
                     ),
                     allow_always=True,
-                    warning_level="high",
+                    warning_level="normal",
                 )
                 if decision == "always":
                     self.allowed_external_dirs.add(ext_folder)
                 elif decision != "allow":
-                    console.print(f"  [yellow]🛡 Akses baca ke folder luar ditolak: {candidate}[/yellow]")
+                    console.print(f"  [yellow]🛡 Akses masuk ke folder luar ditolak: {candidate}[/yellow]")
                     raise PermissionError(
-                        f"Ditolak oleh pengguna: Akses ke folder/file di luar workspace ({candidate}) tidak diizinkan."
+                        f"Ditolak oleh pengguna: Akses ke folder/file ({candidate}) tidak diizinkan."
                     )
 
         # 3. Cek apakah menyentuh file/folder sensitif (.env, .ssh, kunci rahasia, dll.)
@@ -368,6 +384,8 @@ class ToolExecutor:
                     path=str(args.get("path", ".")),
                     file_pattern=str(args.get("file_pattern", "*")),
                 )
+            if name == "check_pc_health":
+                return self._check_pc_health()
 
             if self.mode == "plan":
                 return "Info: Saat ini dalam Plan Mode (Read-Only). Aksi penulisan/eksekusi dinonaktifkan."
@@ -584,31 +602,117 @@ class ToolExecutor:
         console.print(f"  [bold #00f5d4]✔ Berhasil diedit:[/bold #00f5d4] [white]{disp}[/white]")
         return f"Berhasil memperbarui '{disp}'."
 
+    def _check_pc_health(self) -> str:
+        """Diagnostik performa PC (CPU, RAM, Disk, Top aplikasi pemakan memori/CPU) dengan izin YES/NO."""
+        decision = ask_approval(
+            action_title="Mengecek Kesehatan & Performa PC/Laptop",
+            detail="CPU Load, Pemakaian RAM, Sisa Ruang Disk, & Top 12 Aplikasi Terberat",
+            explanation=(
+                "AI ingin membaca informasi performa sistem (Read-Only, tidak mengubah pengaturan apa pun) "
+                "untuk membantu menganalisis penyebab kendala/lemot pada PC Anda."
+            ),
+            allow_always=True,
+        )
+        if decision not in ("allow", "always"):
+            return "Ditolak oleh pengguna: Pengecekan kondisi PC dibatalkan."
+
+        ps_diag = (
+            "$ErrorActionPreference = 'SilentlyContinue'; "
+            "$os = Get-CimInstance Win32_OperatingSystem; "
+            "$cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; "
+            "Write-Output '=== RINGKASAN PERFORMA PC ==='; "
+            "if ($os) { "
+            "  $totalRam = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2); "
+            "  $freeRam = [math]::Round($os.FreePhysicalMemory / 1MB, 2); "
+            "  $usedRam = [math]::Round($totalRam - $freeRam, 2); "
+            "  $pctRam = [math]::Round(($usedRam / $totalRam) * 100, 1); "
+            "  $uptime = (Get-Date) - $os.LastBootUpTime; "
+            "  Write-Output \"CPU Load     : $cpu %\"; "
+            "  Write-Output \"RAM Terpakai : $usedRam GB / $totalRam GB ($pctRam % - Sisa $freeRam GB)\"; "
+            "  Write-Output (\"Uptime PC    : {0} hari {1} jam {2} menit\" -f $uptime.Days, $uptime.Hours, $uptime.Minutes); "
+            "} else { "
+            "  $procRam = [math]::Round(((Get-Process | Measure-Object WorkingSet64 -Sum).Sum / 1GB), 2); "
+            "  Write-Output \"Total WorkingSet Aplikasi Aktif : $procRam GB\"; "
+            "} "
+            "Write-Output \"`n=== PENYIMPANAN DISK ===\"; "
+            "Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } | ForEach-Object { "
+            "  $u = [math]::Round($_.Used / 1GB, 1); $f = [math]::Round($_.Free / 1GB, 1); $t = [math]::Round(($_.Used + $_.Free) / 1GB, 1); "
+            "  Write-Output (\"Drive {0}: -> Sisa {1} GB dari {2} GB (Terpakai {3} GB)\" -f $_.Name, $f, $t, $u) "
+            "}; "
+            "Write-Output \"`n=== TOP 12 APLIKASI PEMAKAN RAM & CPU TERBESAR ===\"; "
+            "Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 12 "
+            "  @{N='Aplikasi';E={$_.ProcessName}}, "
+            "  @{N='PID';E={$_.Id}}, "
+            "  @{N='RAM_MB';E={[math]::Round($_.WorkingSet64 / 1MB, 1)}}, "
+            "  @{N='CPU_Detik';E={[math]::Round($_.CPU, 1)}} | Format-Table -AutoSize | Out-String -Width 120"
+        )
+        console.print("  [dim]🩺 Mengecek diagnostik performa CPU, RAM, Disk & Proses PC...[/dim]")
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_diag],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        return (proc.stdout or proc.stderr or "(Gagal membaca metrik PC)").strip()
+
+    def undo_last_changes(self) -> list[str]:
+        """Kembalikan seluruh file yang diedit pada sesi ini ke kondisi awal (fitur /undo)."""
+        restored: list[str] = []
+        for disp, (original, _updated) in list(self.modified_files.items()):
+            target = (self.workspace / disp).resolve()
+            try:
+                if original == "" and target.exists():
+                    # File baru dibuat pada sesi ini -> kosongkan atau hapus dengan aman di dalam workspace
+                    target.relative_to(self.workspace)
+                    target.unlink()
+                else:
+                    target.write_text(original, encoding="utf-8")
+                restored.append(disp)
+                del self.modified_files[disp]
+            except (OSError, ValueError):
+                continue
+        return restored
+
     def _run_command(self, command: str, timeout: int) -> str:
         lowered = command.lower()
         for pat in BLOCKED_COMMAND_PATTERNS:
             if re.search(pat, lowered):
-                return f"DIBLOKIR SISTEM: Perintah '{command}' terdeteksi berbahaya bagi sistem operasi laptop."
+                return (
+                    f"DIBLOKIR SISTEM: Perintah '{command}' ditolak karena mencoba mengubah konfigurasi laptop/sistem operasi."
+                )
 
+        is_delete_or_risky = any(
+            re.search(pat, lowered) for pat in HIGH_RISK_COMMAND_PATTERNS
+        )
         touches_outside = bool(re.search(r"(\.\.[\\/]|[a-z]:\\)", lowered)) and (
             str(self.workspace).lower() not in lowered
         )
-        warn_lvl = "high" if touches_outside else "normal"
-        extra_note = (
-            "PERHATIAN: Perintah ini tampak merujuk ke path di luar folder kerja proyek Anda! Periksa dengan teliti."
-            if touches_outside
-            else f"Perintah PowerShell ini akan dijalankan di dalam folder kerja `{self.workspace}`."
-        )
+        force_manual = is_delete_or_risky or touches_outside
+        warn_lvl = "high" if force_manual else "normal"
 
-        if touches_outside or not self.session_allow_commands:
+        if is_delete_or_risky:
+            extra_note = (
+                "PERINGATAN: Perintah ini mengandung aksi penghapusan file / reset! "
+                "Periksa dengan teliti sebelum memilih YES."
+            )
+        elif touches_outside:
+            extra_note = (
+                "PERHATIAN: Perintah ini merujuk ke path di luar folder kerja proyek Anda! Periksa dengan teliti."
+            )
+        else:
+            extra_note = f"Perintah PowerShell ini hanya akan dijalankan di dalam folder kerja `{self.workspace}`."
+
+        if force_manual or not self.session_allow_commands:
             decision = ask_approval(
                 action_title="Menjalankan Perintah Terminal (PowerShell)",
                 detail=command,
                 explanation=extra_note,
-                allow_always=not touches_outside,
+                allow_always=not force_manual,
                 warning_level=warn_lvl,
             )
-            if decision == "always" and not touches_outside:
+            if decision == "always" and not force_manual:
                 self.session_allow_commands = True
             elif decision != "allow":
                 console.print("  [yellow]⚠ Eksekusi perintah terminal ditolak oleh pengguna.[/yellow]")

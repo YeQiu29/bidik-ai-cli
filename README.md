@@ -47,8 +47,8 @@
   </tr>
   <tr>
     <td width="50%">
-      <h3>🛠️ Full Local Coding Agent</h3>
-      <p>AI dapat menjelajahi folder (<code>list_files</code>), mencari pola kode (<code>search_code</code>), membaca baris spesifik (<code>read_file</code>), mengedit kode dengan <b>preview diff hijau/merah</b> (<code>edit_file</code>), dan menjalankan pengujian di terminal.</p>
+      <h3>🛠️ Coding Agent &amp; PC Diagnostics</h3>
+      <p>AI dapat menjelajahi folder (<code>list_files</code>), mencari kode (<code>search_code</code>), mengedit file dengan <b>preview diff hijau/merah</b> (<code>edit_file</code>), serta mengecek penyebab <b>PC lemot</b> (CPU, RAM, Disk &amp; aplikasi berat via <code>check_pc_health</code>) dengan izin <b>Yes / No</b> Bahasa Indonesia.</p>
     </td>
     <td width="50%">
       <h3>🕒 Smart Session Cache (<code>/resume</code>)</h3>
@@ -143,9 +143,11 @@ bidik "jelaskan alur autentikasi pada folder ini"
 | `/resume` | Memilih & melanjutkan sesi obrolan sebelumnya (*Smart Session Cache* maks 20 sesi) |
 | `/new` | Memulai sesi percakapan baru tanpa menghapus sesi yang sudah tersimpan |
 | `/mode` | Mengganti mode kerja antara `Agent`, `Plan`, atau `Auto` |
-| `/security` | Memantau batas folder aktif AI & mencabut izin sementara (`/security reset`) |
+| `/cd` | Berpindah ke folder kerja aktif lain tanpa keluar dari CLI (contoh: `/cd C:\Projects\app`) |
+| `/security` | Memantau batas akses folder aktif AI & mencabut izin sementara (`/security reset`) |
 | `/status` | Mengecek status koneksi & latensi server `9router`, ukuran *cache* sesi, serta total pemakaian token |
 | `/diff` | Menampilkan *unified diff* warna hijau/merah atas file yang diubah pada sesi ini atau `git status` |
+| `/undo` | Membatalkan perubahan kode oleh AI pada sesi ini & mengembalikan file ke versi asli |
 | `/clear` | Membersihkan layar terminal & mereset percakapan aktif |
 | `/compact` | Meringkas riwayat percakapan panjang untuk menghemat *context window* |
 | `/clean` | Menghapus bersih seluruh file *cache* riwayat sesi di disk (`0 KB`) |

@@ -44,6 +44,7 @@ STANDALONE_SLASH = {
     "/security",
     "/status",
     "/diff",
+    "/undo",
     "/clear",
     "/compact",
     "/clean",
@@ -52,6 +53,25 @@ STANDALONE_SLASH = {
     "/exit",
     "/quit",
 }
+
+
+def _is_unsafe_root_workspace(workspace: Path) -> bool:
+    """Deteksi apakah user tidak sengaja menjalankan `bidik` di folder sistem / root / Home user."""
+    ws = workspace.resolve()
+    home = Path.home().resolve()
+    ws_lower = str(ws).lower().rstrip("\\/")
+    if ws == home or len(ws.parts) <= 1:
+        return True
+    unsafe_roots = {
+        "c:\\windows",
+        "c:\\program files",
+        "c:\\program files (x86)",
+        "c:\\programdata",
+        "c:\\users",
+    }
+    return ws_lower in unsafe_roots or any(
+        ws_lower.startswith(u + "\\") for u in ("c:\\windows", "c:\\program files", "c:\\program files (x86)")
+    )
 
 
 def _build_prompt_session(
@@ -222,6 +242,27 @@ def _handle_slash_command(
             console.print(f"  [dim]Tetap menggunakan model: {config.model}[/dim]")
         return True
 
+    if cmd == "/cd":
+        if not arg:
+            console.print(f"  [bold #7aa2f7]Folder aktif saat ini:[/bold #7aa2f7] {agent.workspace}")
+            console.print("  [dim]Gunakan `/cd <path_folder>` untuk berpindah folder kerja.[/dim]")
+            return True
+        new_ws = Path(arg).expanduser()
+        if not new_ws.is_absolute():
+            new_ws = (agent.workspace / new_ws).resolve()
+        else:
+            new_ws = new_ws.resolve()
+        if not new_ws.exists() or not new_ws.is_dir():
+            console.print(f"  [bold #ff6b6b]✖ Folder tidak ditemukan:[/bold #ff6b6b] {new_ws}")
+            return True
+        agent.workspace = new_ws
+        agent.executor.workspace = new_ws
+        completer.workspace = new_ws
+        completer.invalidate_cache()
+        agent.sync_mode()
+        console.print(f"  [bold #00f5d4]📂 Folder kerja berpindah ke:[/bold #00f5d4] [bold white]{new_ws}[/bold white]")
+        return True
+
     if cmd == "/mode":
         if arg in ("agent", "plan", "auto"):
             chosen_mode = arg
@@ -299,6 +340,24 @@ def _handle_slash_command(
                 box=box.ROUNDED,
             )
         )
+        return True
+
+    if cmd == "/undo":
+        if not agent.executor.modified_files:
+            console.print("  [dim]Tidak ada perubahan file oleh AI pada sesi ini yang perlu di-undo.[/dim]")
+            return True
+        files_str = ", ".join(agent.executor.modified_files.keys())
+        decision = ask_approval(
+            action_title="Kembalikan (Undo) perubahan kode ke versi semula?",
+            detail=files_str,
+            explanation="Seluruh file yang telah diedit AI pada sesi ini akan dikembalikan ke isi aslinya.",
+            allow_always=False,
+        )
+        if decision == "allow":
+            restored = agent.executor.undo_last_changes()
+            console.print(
+                f"  [bold #00f5d4]⏪ Berhasil mengembalikan {len(restored)} file ke kondisi semula:[/bold #00f5d4] {', '.join(restored)}"
+            )
         return True
 
     if cmd == "/diff":
