@@ -143,6 +143,7 @@ bidik "jelaskan alur autentikasi pada folder ini"
 | `/resume` | Memilih & melanjutkan sesi obrolan sebelumnya (*Smart Session Cache* maks 20 sesi) |
 | `/new` | Memulai sesi percakapan baru tanpa menghapus sesi yang sudah tersimpan |
 | `/mode` | Mengganti mode kerja antara `Agent`, `Plan`, atau `Auto` |
+| `/security` | Memantau batas folder aktif AI & mencabut izin sementara (`/security reset`) |
 | `/status` | Mengecek status koneksi & latensi server `9router`, ukuran *cache* sesi, serta total pemakaian token |
 | `/diff` | Menampilkan *unified diff* warna hijau/merah atas file yang diubah pada sesi ini atau `git status` |
 | `/clear` | Membersihkan layar terminal & mereset percakapan aktif |

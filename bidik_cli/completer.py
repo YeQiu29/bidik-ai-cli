@@ -14,6 +14,7 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/resume", "Buka & lanjutkan sesi obrolan sebelumnya (Session Cache)"),
     ("/new", "Mulai sesi percakapan baru (sesi sebelumnya tetap tersimpan)"),
     ("/mode", "Ganti mode kerja: Agent / Plan (Diskusi) / Auto"),
+    ("/security", "Pantau batas akses folder AI & reset izin sesi"),
     ("/status", "Cek koneksi server 9router, cache sesi & statistik token"),
     ("/diff", "Lihat perubahan kode pada git / sesi saat ini"),
     ("/clear", "Bersihkan layar & reset percakapan saat ini"),

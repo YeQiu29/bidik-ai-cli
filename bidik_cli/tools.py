@@ -1,4 +1,4 @@
-"""Local Coding Tools untuk Bidik CLI (aman, dibatasi ke workspace & konfirmasi user)."""
+"""Local Coding Tools untuk Bidik CLI dengan sistem Security Boundary & konfirmasi Yes/No Bahasa Indonesia."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any
 from .completer import IGNORED_DIRS
 from .ui import ask_approval, console, render_diff
 
-# Pola perintah berbahaya yang selalu diblokir demi keamanan laptop user
+# Pola perintah berbahaya yang selalu diblokir keras demi keamanan laptop user
 BLOCKED_COMMAND_PATTERNS = [
     r"\bformat\s+[a-z]:",
     r"\bdel\s+/[sqf].*c:\\windows",
@@ -24,6 +24,44 @@ BLOCKED_COMMAND_PATTERNS = [
     r"\bdiskpart\b",
     r"\bbcdedit\b",
     r"\breg\s+delete\s+hklm",
+]
+
+# Folder sistem kritis yang tidak boleh ditulis/dimodifikasi dalam kondisi apa pun
+HARD_BLOCKED_WRITE_PREFIXES = [
+    "c:\\windows",
+    "c:\\program files",
+    "c:\\program files (x86)",
+    "c:\\programdata",
+    "/etc",
+    "/bin",
+    "/sbin",
+    "/usr",
+]
+
+# Nama folder atau pola file sensitif (kredensial/rahasia) yang selalu meminta izin Yes/No
+SENSITIVE_FOLDER_NAMES = {
+    ".ssh",
+    ".aws",
+    ".azure",
+    ".gnupg",
+    ".kube",
+    ".bidik",
+    ".docker",
+    "appdata",
+}
+
+SENSITIVE_FILE_PATTERNS = [
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.pfx",
+    "*.p12",
+    "*.ovpn",
+    "id_rsa*",
+    "id_ed25519*",
+    "*credentials*",
+    "*secret*",
 ]
 
 
@@ -180,29 +218,130 @@ def get_tool_schemas(read_only: bool = False) -> list[dict[str, Any]]:
 
 
 class ToolExecutor:
-    """Mengeksekusi tool calls secara aman di dalam workspace lokal."""
+    """Mengeksekusi tool calls dengan batas keamanan folder & pemantauan Yes/No Bahasa Indonesia."""
 
     def __init__(self, workspace: Path, mode: str = "agent") -> None:
         self.workspace = workspace.resolve()
         self.mode = mode
         self.session_allow_edits = False
         self.session_allow_commands = False
-        self.modified_files: dict[str, tuple[str, str]] = {}  # path -> (original, latest)
+        self.allowed_external_dirs: set[Path] = set()
+        self.modified_files: dict[str, tuple[str, str]] = {}
 
-    def _resolve_safe_path(self, raw_path: str, for_write: bool = False) -> Path:
+    def reset_permissions(self) -> None:
+        """Cabut semua izin sementara yang diberikan selama sesi ini."""
+        self.session_allow_edits = False
+        self.session_allow_commands = False
+        self.allowed_external_dirs.clear()
+
+    @staticmethod
+    def _is_sensitive_path(target: Path) -> str | None:
+        """Cek apakah path menyentuh folder atau file sensitif/rahasia."""
+        lower_parts = {p.lower() for p in target.parts}
+        hit_folders = lower_parts.intersection(SENSITIVE_FOLDER_NAMES)
+        if hit_folders:
+            folder_name = sorted(hit_folders)[0]
+            return f"Lokasi ini berada di dalam folder sensitif/kredensial (`{folder_name}`)."
+
+        fname = target.name.lower()
+        if fname != ".env.example":
+            for pat in SENSITIVE_FILE_PATTERNS:
+                if fnmatch.fnmatch(fname, pat):
+                    return (
+                        f"File `{target.name}` terdeteksi berpotensi menyimpan konfigurasi rahasia, "
+                        "API key, password, atau kunci privat."
+                    )
+        return None
+
+    def _is_within_allowed_external(self, target: Path) -> bool:
+        for allowed_dir in self.allowed_external_dirs:
+            try:
+                target.relative_to(allowed_dir)
+                return True
+            except ValueError:
+                continue
+        return False
+
+    def _check_path_access(
+        self, raw_path: str, action_desc: str, for_write: bool = False
+    ) -> Path:
+        """Validasi batas folder workspace & tampilkan dialog keamanan Yes/No Bahasa Indonesia."""
         candidate = Path(raw_path)
         if not candidate.is_absolute():
             candidate = (self.workspace / candidate).resolve()
         else:
             candidate = candidate.resolve()
 
+        norm_lower = str(candidate).lower()
+
+        # 1. Blokir keras penulisan ke folder inti sistem operasi
         if for_write:
-            try:
-                candidate.relative_to(self.workspace)
-            except ValueError as exc:
+            for sys_prefix in HARD_BLOCKED_WRITE_PREFIXES:
+                if norm_lower.startswith(sys_prefix):
+                    raise PermissionError(
+                        f"DIBLOKIR SISTEM: AI dilarang keras mengubah file di dalam folder sistem operasi ({candidate})."
+                    )
+
+        # 2. Cek apakah berada di luar batas folder kerja proyek (Out-of-Workspace)
+        inside_workspace = True
+        try:
+            candidate.relative_to(self.workspace)
+        except ValueError:
+            inside_workspace = False
+
+        if not inside_workspace:
+            if for_write:
+                decision = ask_approval(
+                    action_title=f"{action_desc} di LUAR Folder Proyek",
+                    detail=str(candidate),
+                    explanation=(
+                        f"AI meminta izin mengubah file di luar batas folder kerja proyek Anda (`{self.workspace}`). "
+                        "Demi keamanan laptop, tolak (NO) jika Anda tidak mengharapkan perubahan di lokasi tersebut."
+                    ),
+                    allow_always=False,
+                    warning_level="high",
+                )
+                if decision != "allow":
+                    console.print(f"  [yellow]🛡 Akses penulisan ke luar workspace ditolak: {candidate}[/yellow]")
+                    raise PermissionError(
+                        f"Ditolak oleh pengguna: AI tidak diizinkan menulis di luar workspace ({candidate})."
+                    )
+            elif not self._is_within_allowed_external(candidate):
+                ext_folder = candidate if candidate.is_dir() else candidate.parent
+                decision = ask_approval(
+                    action_title=f"{action_desc} di LUAR Folder Proyek",
+                    detail=str(candidate),
+                    explanation=(
+                        f"AI ingin mengakses folder/file yang berada di luar batas proyek aktif Anda (`{self.workspace}`). "
+                        "Pilih YES hanya jika folder tersebut memang boleh dibaca oleh AI."
+                    ),
+                    allow_always=True,
+                    warning_level="high",
+                )
+                if decision == "always":
+                    self.allowed_external_dirs.add(ext_folder)
+                elif decision != "allow":
+                    console.print(f"  [yellow]🛡 Akses baca ke folder luar ditolak: {candidate}[/yellow]")
+                    raise PermissionError(
+                        f"Ditolak oleh pengguna: Akses ke folder/file di luar workspace ({candidate}) tidak diizinkan."
+                    )
+
+        # 3. Cek apakah menyentuh file/folder sensitif (.env, .ssh, kunci rahasia, dll.)
+        sensitive_reason = self._is_sensitive_path(candidate)
+        if sensitive_reason:
+            decision = ask_approval(
+                action_title=f"{action_desc} pada File/Folder Sensitif",
+                detail=str(candidate),
+                explanation=f"{sensitive_reason} Pastikan aman sebelum mengizinkan AI mengaksesnya.",
+                allow_always=False,
+                warning_level="high",
+            )
+            if decision != "allow":
+                console.print(f"  [yellow]🛡 Akses ke data sensitif ditolak: {candidate}[/yellow]")
                 raise PermissionError(
-                    f"Demi keamanan sistem laptop, penulisan di luar workspace '{self.workspace}' ditolak: {candidate}"
-                ) from exc
+                    f"Ditolak oleh pengguna: Akses ke file/folder sensitif '{candidate.name}' dibatalkan."
+                )
+
         return candidate
 
     def execute(self, name: str, raw_args: str) -> str:
@@ -250,11 +389,15 @@ class ToolExecutor:
                     timeout=int(args.get("timeout", 60) or 60),
                 )
             return f"Error: Tool '{name}' tidak dikenali."
+        except PermissionError as exc:
+            return str(exc)
         except Exception as exc:
             return f"Error saat menjalankan {name}: {exc}"
 
     def _list_files(self, path: str, max_depth: int) -> str:
-        target = self._resolve_safe_path(path, for_write=False)
+        target = self._check_path_access(
+            path, action_desc="Melihat daftar isi folder", for_write=False
+        )
         if not target.exists():
             return f"Error: Direktori '{path}' tidak ditemukan."
         if target.is_file():
@@ -292,7 +435,9 @@ class ToolExecutor:
     def _read_file(
         self, path: str, start_line: int | None = None, end_line: int | None = None
     ) -> str:
-        target = self._resolve_safe_path(path, for_write=False)
+        target = self._check_path_access(
+            path, action_desc="Membaca isi file", for_write=False
+        )
         if not target.exists():
             return f"Error: File '{path}' tidak ditemukan."
         if not target.is_file():
@@ -314,7 +459,9 @@ class ToolExecutor:
         return header + "\n".join(numbered)
 
     def _search_code(self, query: str, path: str, file_pattern: str) -> str:
-        target = self._resolve_safe_path(path, for_write=False)
+        target = self._check_path_access(
+            path, action_desc=f"Mencari teks '{query}' di dalam folder", for_write=False
+        )
         if not target.exists():
             return f"Error: Path '{path}' tidak ditemukan."
 
@@ -330,6 +477,8 @@ class ToolExecutor:
                 if not fnmatch.fnmatch(fname, file_pattern):
                     continue
                 fpath = Path(root) / fname
+                if self._is_sensitive_path(fpath):
+                    continue
                 try:
                     if fpath.stat().st_size > 1_000_000:
                         continue
@@ -358,81 +507,111 @@ class ToolExecutor:
             return f"Tidak ditemukan kecocokan untuk '{query}'."
         return "\n".join(matches)
 
-    def _confirm_edit(self, rel_path: str, old_text: str, new_text: str, is_new: bool) -> bool:
-        render_diff(rel_path, old_text, new_text)
+    def _confirm_edit(self, target: Path, display_path: str, old_text: str, new_text: str, is_new: bool) -> bool:
+        render_diff(display_path, old_text, new_text)
         if self.mode == "auto" or self.session_allow_edits:
             return True
 
-        action_label = f"Buat file baru '{rel_path}'" if is_new else f"Edit file '{rel_path}'"
-        decision = ask_approval(action_label, f"Lokasi: {self.workspace / rel_path}")
+        action_label = f"Membuat file baru `{display_path}`" if is_new else f"Mengubah isi file `{display_path}`"
+        decision = ask_approval(
+            action_title=action_label,
+            detail=str(target),
+            explanation=(
+                "Periksa kotak Diff berwarna hijau (+) dan merah (-) di atas. "
+                "Pilih YES jika perubahan kode sudah sesuai keinginan Anda."
+            ),
+            allow_always=True,
+        )
         if decision == "always":
             self.session_allow_edits = True
             return True
         return decision == "allow"
 
-    def _record_modification(self, rel_path: str, original: str, updated: str) -> None:
-        if rel_path in self.modified_files:
-            orig, _ = self.modified_files[rel_path]
-            self.modified_files[rel_path] = (orig, updated)
+    def _record_modification(self, display_path: str, original: str, updated: str) -> None:
+        if display_path in self.modified_files:
+            orig, _ = self.modified_files[display_path]
+            self.modified_files[display_path] = (orig, updated)
         else:
-            self.modified_files[rel_path] = (original, updated)
+            self.modified_files[display_path] = (original, updated)
+
+    def _display_rel(self, target: Path) -> str:
+        try:
+            return target.relative_to(self.workspace).as_posix()
+        except ValueError:
+            return str(target)
 
     def _write_file(self, path: str, content: str) -> str:
-        target = self._resolve_safe_path(path, for_write=True)
-        rel_path = target.relative_to(self.workspace).as_posix()
+        target = self._check_path_access(
+            path, action_desc="Menulis / membuat file", for_write=True
+        )
+        disp = self._display_rel(target)
         is_new = not target.exists()
         old_content = "" if is_new else target.read_text(encoding="utf-8", errors="replace")
 
-        if not self._confirm_edit(rel_path, old_content, content, is_new=is_new):
-            console.print(f"  [yellow]⚠ Penulisan file '{rel_path}' dibatalkan oleh pengguna.[/yellow]")
-            return f"Ditolak oleh pengguna: File '{rel_path}' tidak diubah."
+        if not self._confirm_edit(target, disp, old_content, content, is_new=is_new):
+            console.print(f"  [yellow]⚠ Penulisan file '{disp}' dibatalkan oleh pengguna.[/yellow]")
+            return f"Ditolak oleh pengguna: File '{disp}' tidak diubah."
 
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        self._record_modification(rel_path, old_content, content)
-        console.print(f"  [bold #00f5d4]✔ Tersimpan:[/bold #00f5d4] [white]{rel_path}[/white]")
-        return f"Berhasil menulis file '{rel_path}' ({len(content.splitlines())} baris)."
+        self._record_modification(disp, old_content, content)
+        console.print(f"  [bold #00f5d4]✔ Tersimpan:[/bold #00f5d4] [white]{disp}[/white]")
+        return f"Berhasil menulis file '{disp}' ({len(content.splitlines())} baris)."
 
     def _edit_file(self, path: str, old_text: str, new_text: str) -> str:
-        target = self._resolve_safe_path(path, for_write=True)
+        target = self._check_path_access(
+            path, action_desc="Mengedit baris kode pada file", for_write=True
+        )
         if not target.exists():
             return f"Error: File '{path}' tidak ditemukan."
 
-        rel_path = target.relative_to(self.workspace).as_posix()
+        disp = self._display_rel(target)
         original = target.read_text(encoding="utf-8", errors="replace")
 
         if old_text not in original:
             return (
-                f"Error: Blok `old_text` tidak ditemukan persis di '{rel_path}'. "
+                f"Error: Blok `old_text` tidak ditemukan persis di '{disp}'. "
                 "Gunakan read_file terlebih dahulu untuk memastikan indentasi dan isi baris akurat."
             )
 
         updated = original.replace(old_text, new_text, 1)
-        if not self._confirm_edit(rel_path, original, updated, is_new=False):
-            console.print(f"  [yellow]⚠ Edit file '{rel_path}' dibatalkan oleh pengguna.[/yellow]")
-            return f"Ditolak oleh pengguna: File '{rel_path}' tidak diubah."
+        if not self._confirm_edit(target, disp, original, updated, is_new=False):
+            console.print(f"  [yellow]⚠ Edit file '{disp}' dibatalkan oleh pengguna.[/yellow]")
+            return f"Ditolak oleh pengguna: File '{disp}' tidak diubah."
 
         target.write_text(updated, encoding="utf-8")
-        self._record_modification(rel_path, original, updated)
-        console.print(f"  [bold #00f5d4]✔ Berhasil diedit:[/bold #00f5d4] [white]{rel_path}[/white]")
-        return f"Berhasil memperbarui '{rel_path}'."
+        self._record_modification(disp, original, updated)
+        console.print(f"  [bold #00f5d4]✔ Berhasil diedit:[/bold #00f5d4] [white]{disp}[/white]")
+        return f"Berhasil memperbarui '{disp}'."
 
     def _run_command(self, command: str, timeout: int) -> str:
         lowered = command.lower()
         for pat in BLOCKED_COMMAND_PATTERNS:
             if re.search(pat, lowered):
-                return f"Diblokir: Perintah '{command}' terdeteksi berbahaya bagi sistem laptop."
+                return f"DIBLOKIR SISTEM: Perintah '{command}' terdeteksi berbahaya bagi sistem operasi laptop."
 
-        console.print(f"\n  [bold #fee440]💻 Permintaan Eksekusi Terminal:[/bold #fee440] [bold white]{command}[/bold white]")
-        if not self.session_allow_commands:
+        touches_outside = bool(re.search(r"(\.\.[\\/]|[a-z]:\\)", lowered)) and (
+            str(self.workspace).lower() not in lowered
+        )
+        warn_lvl = "high" if touches_outside else "normal"
+        extra_note = (
+            "PERHATIAN: Perintah ini tampak merujuk ke path di luar folder kerja proyek Anda! Periksa dengan teliti."
+            if touches_outside
+            else f"Perintah PowerShell ini akan dijalankan di dalam folder kerja `{self.workspace}`."
+        )
+
+        if touches_outside or not self.session_allow_commands:
             decision = ask_approval(
-                "Jalankan perintah PowerShell di folder kerja?",
-                f"Command: {command}  |  CWD: {self.workspace}",
+                action_title="Menjalankan Perintah Terminal (PowerShell)",
+                detail=command,
+                explanation=extra_note,
+                allow_always=not touches_outside,
+                warning_level=warn_lvl,
             )
-            if decision == "always":
+            if decision == "always" and not touches_outside:
                 self.session_allow_commands = True
             elif decision != "allow":
-                console.print("  [yellow]⚠ Eksekusi perintah ditolak oleh pengguna.[/yellow]")
+                console.print("  [yellow]⚠ Eksekusi perintah terminal ditolak oleh pengguna.[/yellow]")
                 return "Ditolak oleh pengguna: Perintah tidak dijalankan."
 
         timeout = max(5, min(timeout, 180))

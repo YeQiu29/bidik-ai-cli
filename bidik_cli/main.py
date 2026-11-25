@@ -24,6 +24,7 @@ from .ui import (
     MODE_BADGES,
     PROMPT_STYLE,
     ask_approval,
+    ask_workspace_trust,
     console,
     render_banner,
     render_diff,
@@ -40,6 +41,7 @@ STANDALONE_SLASH = {
     "/sessions",
     "/new",
     "/mode",
+    "/security",
     "/status",
     "/diff",
     "/clear",
@@ -233,6 +235,43 @@ def _handle_slash_command(
             console.print(f"  [bold #00f5d4]✔ Mode diubah ke:[/bold #00f5d4] [{style}]{badge}[/{style}] — [dim]{desc}[/dim]")
         return True
 
+    if cmd == "/security":
+        if arg.lower() == "reset":
+            agent.executor.reset_permissions()
+            console.print(
+                "  [bold #00f5d4]🔐 Seluruh izin akses sementara sesi ini berhasil direset kembali ke ketat![/bold #00f5d4]"
+            )
+            return True
+
+        ext_list = (
+            ", ".join(str(p) for p in sorted(agent.executor.allowed_external_dirs))
+            if agent.executor.allowed_external_dirs
+            else "Tidak ada (ketat terkunci di folder proyek)"
+        )
+        sec_tbl = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        sec_tbl.add_column(style="bold #7aa2f7")
+        sec_tbl.add_column(style="white")
+        sec_tbl.add_row("Batas Folder Proyek", f"[bold #00f5d4]{agent.workspace}[/bold #00f5d4]")
+        sec_tbl.add_row("Proteksi Luar Folder", "Aktif — Wajib konfirmasi Yes/No Bahasa Indonesia")
+        sec_tbl.add_row("Proteksi File Rahasia", "Aktif — `.env`, `.ssh`, `.key`, `.pem`, `AppData` dipantau")
+        sec_tbl.add_row("Folder Sistem OS", "Diblokir Keras (`C:\\Windows`, `Program Files`)")
+        sec_tbl.add_row("Folder Luar Diizinkan", ext_list)
+        sec_tbl.add_row(
+            "Izin Edit / Terminal Sesi",
+            f"Auto-Edit: {'Ya' if agent.executor.session_allow_edits else 'Tanya Yes/No'} • "
+            f"Auto-Cmd: {'Ya' if agent.executor.session_allow_commands else 'Tanya Yes/No'}",
+        )
+        console.print(
+            Panel(
+                sec_tbl,
+                title="[bold #00f5d4]🛡️ Status Batasan Keamanan AI (/security)[/bold #00f5d4]",
+                subtitle="[dim]Ketik `/security reset` untuk mencabut semua izin sesi sementara[/dim]",
+                border_style="#00bbf9",
+                box=box.ROUNDED,
+            )
+        )
+        return True
+
     if cmd == "/status":
         status = client.check_status(timeout=5.0)
         tbl = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
@@ -412,7 +451,15 @@ def main() -> None:
 
     config.save()
 
-    workspace = Path.cwd()
+    workspace = Path.cwd().resolve()
+    ws_norm = str(workspace).lower()
+    if ws_norm not in [w.lower() for w in config.trusted_workspaces]:
+        if not ask_workspace_trust(workspace):
+            console.print("  [yellow]🚪 Akses folder tidak diizinkan. Keluar dari Bidik CLI.[/yellow]")
+            return
+        config.trusted_workspaces.append(str(workspace))
+        config.save()
+
     client = BidikClient(config)
     agent = BidikAgent(config=config, client=client, workspace=workspace)
 

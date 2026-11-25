@@ -143,6 +143,7 @@ def render_help() -> None:
     table.add_row("/resume", "Pilih & lanjutkan sesi obrolan sebelumnya (otomatis tersimpan maks 20 sesi)")
     table.add_row("/new", "Mulai sesi obrolan baru tanpa menghapus sesi sebelumnya")
     table.add_row("/mode", "Ubah mode kerja: Agent (default), Plan (diskusi aman), atau Auto")
+    table.add_row("/security", "Lihat batas akses folder AI & cabut izin sementara (/security reset)")
     table.add_row("/status", "Cek koneksi server 9router, ukuran cache sesi, dan pemakaian token")
     table.add_row("/diff", "Lihat ringkasan perubahan kode (git diff / file yang diedit di sesi ini)")
     table.add_row("/clear", "Bersihkan layar percakapan saat ini")
@@ -439,25 +440,62 @@ def select_mode_interactive(current_mode: str) -> str | None:
     return res
 
 
-def ask_approval(action_title: str, detail: str = "") -> str:
-    """Konfirmasi keamanan interaktif: return 'allow' | 'always' | 'deny'."""
-    choices = [
-        ("allow", "✔ Izinkan Sekali (Enter / Y)"),
-        ("always", "⚡ Izinkan Selalu di Sesi Ini (A)"),
-        ("deny", "✖ Tolak Aksi Ini (N / Esc)"),
+def ask_approval(
+    action_title: str,
+    detail: str = "",
+    explanation: str = "",
+    allow_always: bool = True,
+    warning_level: str = "normal",
+) -> str:
+    """Konfirmasi keamanan Yes/No interaktif dalam Bahasa Indonesia.
+
+    Return: 'allow' | 'always' | 'deny'
+    """
+    if not sys.stdin.isatty():
+        return "deny"
+
+    border = "#ff6b6b" if warning_level == "high" else "#fee440"
+    badge = "🚨 PERINGATAN KEAMANAN TINGGI" if warning_level == "high" else "🛡️ KONFIRMASI KEAMANAN AI"
+
+    body_lines = [f"[bold white]Aksi AI :[/bold white] {action_title}"]
+    if detail:
+        body_lines.append(f"[bold #7aa2f7]Target  :[/bold #7aa2f7] [white]{detail}[/white]")
+    if explanation:
+        body_lines.append(f"[bold #fee440]Info    :[/bold #fee440] [dim white]{explanation}[/dim white]")
+
+    console.print()
+    console.print(
+        Panel(
+            "\n".join(body_lines),
+            title=f"[bold {border}]{badge}[/bold {border}]",
+            title_align="left",
+            border_style=border,
+            box=box.ROUNDED,
+            padding=(0, 2),
+        )
+    )
+
+    choices: list[tuple[str, str]] = [
+        ("allow", "✔ YES — Ya, Izinkan Sekali Ini Saja (Tekan Y / Enter)"),
     ]
-    state = {"index": 0}
+    if allow_always:
+        choices.append(("always", "⚡ YES (Sesi) — Ya, Izinkan Selama Sesi Ini Berjalan (Tekan A)"))
+    choices.append(("deny", "✖ NO  — Tidak, Tolak Akses Ini (Tekan N / Esc)"))
+
+    state = {"index": len(choices) - 1 if warning_level == "high" else 0}
 
     def render() -> FormattedText:
         frags: list[tuple[str, str]] = [
-            ("bold fg:#fee440", f" 🛡  Konfirmasi Izin: {action_title}\n"),
+            ("fg:#9aa5ce", "  Pilih keputusan Anda (↑↓ pilih • Y = Ya • N = Tidak):\n"),
         ]
-        if detail:
-            frags.append(("fg:#9aa5ce", f"    {detail}\n"))
-        for i, (_key, label) in enumerate(choices):
+        for i, (key, label) in enumerate(choices):
             sel = i == state["index"]
             ptr = " ❯ " if sel else "   "
-            style = "bg:#00f5d4 fg:#0f111a bold" if sel else "fg:#e0e6ed"
+            if sel:
+                bg = "bg:#ff6b6b" if key == "deny" else "bg:#00f5d4"
+                style = f"{bg} fg:#0f111a bold"
+            else:
+                style = "fg:#e0e6ed"
             frags.append((style, f"{ptr}{label}\n"))
         return FormattedText(frags)
 
@@ -481,7 +519,8 @@ def ask_approval(action_title: str, detail: str = "") -> str:
 
     @kb.add("a")
     def _always(e) -> None:
-        e.app.exit(result="always")
+        if allow_always:
+            e.app.exit(result="always")
 
     @kb.add("n")
     @kb.add("escape")
@@ -495,6 +534,55 @@ def ask_approval(action_title: str, detail: str = "") -> str:
         full_screen=False,
     )
     return app.run() or "deny"
+
+
+def ask_workspace_trust(workspace: Path) -> bool:
+    """Konfirmasi Yes/No saat pertama kali Bidik CLI dijalankan di sebuah folder baru."""
+    if not sys.stdin.isatty():
+        return True
+
+    ws_resolved = workspace.resolve()
+    home_dir = Path.home().resolve()
+    ws_lower = str(ws_resolved).lower()
+
+    is_broad_or_sys = (
+        ws_resolved == home_dir
+        or len(ws_resolved.parts) <= 2
+        or "c:\\windows" in ws_lower
+        or "program files" in ws_lower
+    )
+
+    extra_warn = ""
+    if is_broad_or_sys:
+        extra_warn = (
+            "\n\n[bold #ff6b6b]⚠ PERHATIAN:[/bold #ff6b6b] Anda membuka Bidik CLI di folder induk/sistem yang cakupannya luas "
+            f"(`[white]{ws_resolved}[/white]`). Sebaiknya jalankan `bidik` langsung di dalam sub-folder proyek kodingan spesifik Anda."
+        )
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold white]Folder Kerja yang Diminta:[/bold white] [bold #00bbf9]{ws_resolved}[/bold #00bbf9]\n\n"
+            "[bold #00f5d4]Aturan Batasan Keamanan AI:[/bold #00f5d4]\n"
+            "• AI dibatasi hanya bekerja di dalam folder proyek ini.\n"
+            "• Jika AI mencoba [bold]membaca atau mengakses folder lain[/bold] di luar folder ini, sistem akan menghentikan AI dan meminta izin [bold]Yes / No[/bold] Anda.\n"
+            "• File rahasia (`.env`, `.ssh`, kunci privat) dan perintah terminal selalu dipantau dengan konfirmasi Anda."
+            + extra_warn,
+            title="[bold #00f5d4]🔐 Izin Akses Folder Kerja (Workspace Security)[/bold #00f5d4]",
+            border_style="#ff6b6b" if is_broad_or_sys else "#00bbf9",
+            box=box.ROUNDED,
+            padding=(0, 2),
+        )
+    )
+
+    decision = ask_approval(
+        action_title=f"Izinkan Bidik CLI bekerja di dalam folder '{ws_resolved.name or ws_resolved}'?",
+        detail=str(ws_resolved),
+        explanation="Pilih YES jika ini memang folder proyek kodingan Anda, atau NO untuk keluar.",
+        allow_always=False,
+        warning_level="high" if is_broad_or_sys else "normal",
+    )
+    return decision == "allow"
 
 
 def select_session_interactive(

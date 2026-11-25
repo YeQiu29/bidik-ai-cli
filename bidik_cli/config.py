@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".bidik"
@@ -89,6 +89,7 @@ class BidikConfig:
     max_steps: int = 25
     timeout: float = 120.0
     show_reasoning: bool = True
+    trusted_workspaces: list[str] = field(default_factory=list)
 
     @classmethod
     def load(cls) -> "BidikConfig":
