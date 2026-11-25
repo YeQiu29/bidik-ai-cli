@@ -233,6 +233,23 @@ def get_tool_schemas(read_only: bool = False) -> list[dict[str, Any]]:
     return schemas
 
 
+def is_broad_directory(path: Path) -> bool:
+    """Deteksi apakah path adalah folder induk umum (Home, Root Drive, Downloads, Documents, OneDrive)
+    yang tidak boleh dianggap sebagai satu folder proyek tunggal."""
+    p = path.resolve()
+    home = Path.home().resolve()
+    if len(p.parts) <= 1 or p == home.parent or p == home:
+        return True
+    if p.parent == home:
+        low = p.name.lower()
+        if low in {"desktop", "documents", "downloads", "pictures", "videos", "music"} or low.startswith("onedrive"):
+            return True
+    if p.parent.parent == home and p.parent.name.lower().startswith("onedrive"):
+        if p.name.lower() in {"desktop", "documents", "downloads"}:
+            return True
+    return False
+
+
 class ToolExecutor:
     """Mengeksekusi tool calls dengan batas keamanan folder & pemantauan Yes/No Bahasa Indonesia."""
 
@@ -298,46 +315,54 @@ class ToolExecutor:
                         f"DIBLOKIR SISTEM: File inti kernel Windows tidak boleh ditimpa ({candidate})."
                     )
 
-        # 2. Cek apakah berada di luar batas folder kerja proyek (Out-of-Workspace) -> Tanya YES / NO!
-        inside_workspace = True
-        try:
-            candidate.relative_to(self.workspace)
-        except ValueError:
-            inside_workspace = False
+        # 2. Cek apakah berada di luar batas folder proyek spesifik (atau jika CLI dibuka dari folder induk umum seperti C:\Users\Nama)
+        broad_ws = is_broad_directory(self.workspace)
+        inside_workspace = False
+        if not broad_ws:
+            try:
+                candidate.relative_to(self.workspace)
+                inside_workspace = True
+            except ValueError:
+                inside_workspace = False
 
         if not inside_workspace:
             ext_folder = candidate if candidate.is_dir() else candidate.parent
+            target_is_broad = is_broad_directory(ext_folder)
             if for_write:
                 decision = ask_approval(
-                    action_title=f"{action_desc} di Luar Folder Kerja Saat Ini",
+                    action_title=f"{action_desc} pada Folder `{ext_folder.name or ext_folder}`",
                     detail=str(candidate),
                     explanation=(
-                        f"AI ingin mengedit/menulis file di folder `{ext_folder}` (di luar `{self.workspace}`). "
-                        "Pilih YES jika Anda mengizinkan perubahan di folder tersebut, atau NO untuk menolak."
+                        f"AI meminta izin menulis/mengedit file di `{candidate}`. "
+                        "Pilih YES jika Anda mengizinkan perubahan pada file tersebut, atau NO untuk menolak."
                     ),
                     allow_always=False,
                     warning_level="high",
                 )
                 if decision != "allow":
-                    console.print(f"  [yellow]🛡 Penulisan ke folder luar ditolak: {candidate}[/yellow]")
+                    console.print(f"  [yellow]🛡 Penulisan ditolak pengguna: {candidate}[/yellow]")
                     raise PermissionError(
-                        f"Ditolak oleh pengguna: Penulisan di luar workspace ({candidate}) tidak diizinkan."
+                        f"Ditolak oleh pengguna: Penulisan ke ({candidate}) tidak diizinkan."
                     )
             elif not self._is_within_allowed_external(candidate):
+                reason = (
+                    f"Anda menjalankan Bidik CLI dari folder induk (`{self.workspace}`), dan AI meminta izin mengecek `{candidate}`."
+                    if broad_ws
+                    else f"AI ingin masuk/membaca `{ext_folder}` yang berada di luar folder proyek aktif (`{self.workspace}`)."
+                )
                 decision = ask_approval(
-                    action_title=f"{action_desc} ke Folder Lain",
+                    action_title=f"{action_desc} — Mohon Izin Akses Folder",
                     detail=str(candidate),
                     explanation=(
-                        f"AI ingin masuk/membaca folder `{ext_folder}` yang berada di luar folder aktif `{self.workspace}`. "
-                        "Pilih YES untuk mengizinkan AI mengecek folder tersebut, atau NO untuk menolak."
+                        f"{reason} Pilih YES (atau tekan A untuk mengizinkan folder proyek ini selama sesi berjalan), atau NO untuk menolak."
                     ),
-                    allow_always=True,
-                    warning_level="normal",
+                    allow_always=not target_is_broad,
+                    warning_level="high" if target_is_broad else "normal",
                 )
-                if decision == "always":
+                if decision == "always" and not target_is_broad:
                     self.allowed_external_dirs.add(ext_folder)
                 elif decision != "allow":
-                    console.print(f"  [yellow]🛡 Akses masuk ke folder luar ditolak: {candidate}[/yellow]")
+                    console.print(f"  [yellow]🛡 Akses folder ditolak pengguna: {candidate}[/yellow]")
                     raise PermissionError(
                         f"Ditolak oleh pengguna: Akses ke folder/file ({candidate}) tidak diizinkan."
                     )

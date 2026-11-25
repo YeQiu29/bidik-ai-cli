@@ -21,6 +21,7 @@ from .client import BidikClient
 from .completer import BidikCompleter
 from .config import BidikConfig, get_data_dir, get_history_file
 from .updater import check_for_updates, perform_update
+from .tools import is_broad_directory
 from .ui import (
     MODE_BADGES,
     PROMPT_STYLE,
@@ -566,7 +567,14 @@ def main() -> None:
 
     workspace = Path.cwd().resolve()
     ws_norm = str(workspace).lower()
-    if ws_norm not in [w.lower() for w in config.trusted_workspaces]:
+    if is_broad_directory(workspace):
+        # Jangan pernah simpan folder induk umum (misal C:\Users\Dennis) ke daftar bebas-izin permanen!
+        # Setiap akses sub-folder di dalamnya akan selalu meminta izin YES/NO spesifik kepada pengguna.
+        config.trusted_workspaces = [
+            w for w in config.trusted_workspaces if not is_broad_directory(Path(w))
+        ]
+        config.save()
+    elif ws_norm not in [w.lower() for w in config.trusted_workspaces]:
         if not ask_workspace_trust(workspace):
             console.print("  [yellow]🚪 Akses folder tidak diizinkan. Keluar dari Bidik CLI.[/yellow]")
             return
