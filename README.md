@@ -1,128 +1,199 @@
-# ⚡ Bidik CLI
+<div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-00bbf9)
-![Gateway](https://img.shields.io/badge/LLM_Gateway-9router_OpenAI_API-9b5de5)
+<img src="assets/hero-banner.svg" alt="Bidik CLI Animated Banner" width="100%" />
 
-**Bidik CLI** adalah *Agentic AI Coding Assistant* berbasis terminal (seperti Antigravity CLI / OpenCode / Claude Code) yang dibangun menggunakan **Python** dan terhubung langsung ke server AI **`9router`**.
+<br/>
 
-Dirancang ringan, aman di dalam *isolated virtual environment* (`.venv`), dan mampu membantu membaca kode, mencari *bug*, mengedit file proyek lengkap dengan *preview diff*, serta menjalankan pengujian langsung dari terminal Anda.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-00bbf9?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/OS-Windows%20%7C%20Linux%20%7C%20macOS-00f5d4?style=for-the-badge&logo=windows-terminal&logoColor=black)](#)
+[![9router](https://img.shields.io/badge/Gateway-9router_OpenAI_API-9b5de5?style=for-the-badge)](#)
+[![Environment](https://img.shields.io/badge/Isolated-.venv_Safe-2ecc71?style=for-the-badge)](#)
+
+<p align="center">
+  <b>Otak AI di Server <code>9router</code> • Tangan Eksekutor Koding Langsung di Terminal Laptop Anda</b><br/>
+  <sub>Ringan (~40 MB RAM) • Tanpa <code>npm</code> • Live Model Selector • Smart Session Resume • Unified Diff Preview</sub>
+</p>
+
+[✨ Fitur Utama](#-fitur-utama) •
+[🎬 Live Demo](#-tampilan-interaktif) •
+[🧠 Arsitektur](#-arsitektur-kerja) •
+[🚀 Instalasi Cepat](#-cara-instalasi) •
+[⌨️ Perintah](#-daftar-slash-commands)
+
+</div>
+
+---
+
+## 🎬 Tampilan Interaktif
+
+<div align="center">
+  <img src="assets/terminal-demo.svg" alt="Bidik CLI Live Terminal Demo" width="96%" />
+</div>
 
 ---
 
 ## ✨ Fitur Utama
 
-* **🤖 Pemilihan Model Live (`/model`):** Mengambil daftar seluruh model secara *real-time* dari endpoint `/v1/models` server `9router` (Combo, Antigravity, Gemini, OpenCode, Ollama, dll.) lengkap dengan fitur pencarian cepat & navigasi tombol panah.
-* **⚡ Popup Autocomplete Interaktif (`/` & `@`):**
-  * Ketik `/` untuk memunculkan menu perintah otomatis.
-  * Ketik `@` untuk mencari dan melampirkan file proyek ke dalam *prompt* (contoh: `perbaiki bug di @login.py`).
-* **🕒 Smart Session Cache (`/resume` & `bidik -c`):** Riwayat percakapan tersimpan otomatis dan dilengkapi *auto-cleanup* (maksimal 20 sesi terakhir) agar penyimpanan tetap ringan.
-* **🛠️ Local Coding Agent Tools:** Mendukung `list_files`, `read_file`, `search_code`, `write_file`, `edit_file` (dengan tampilan *unified diff* hijau/merah), dan `run_command` dengan konfirmasi keamanan pengguna.
-* **🎛️ 3 Mode Kerja (`/mode`):**
-  * `⚡ Agent` — Mode standar dengan konfirmasi izin sebelum mengubah file / menjalankan terminal.
-  * `🧭 Plan` — Mode *read-only* murni untuk diskusi arsitektur & analisis aman tanpa mengubah file apa pun.
-  * `🚀 Auto` — Otomatis menerapkan perubahan kode di dalam folder proyek kerja.
+<table>
+  <tr>
+    <td width="50%">
+      <h3>🔀 Live Model Picker (<code>/model</code>)</h3>
+      <p>Menarik daftar puluhan model AI secara <i>real-time</i> dari endpoint <code>/v1/models</code> server <b>9router</b> (Combo, Antigravity, Gemini, OpenCode, Ollama) lengkap dengan kotak pencarian instan &amp; navigasi tombol panah.</p>
+    </td>
+    <td width="50%">
+      <h3>⚡ Autocomplete Pintar (<code>/</code> &amp; <code>@file</code>)</h3>
+      <p>Ketik <code>/</code> untuk memunculkan menu perintah melayang secara otomatis, atau ketik <code>@</code> (contoh: <code>perbaiki bug di @auth.py</code>) untuk mencari dan melampirkan kode proyek langsung ke konteks AI.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🛠️ Full Local Coding Agent</h3>
+      <p>AI dapat menjelajahi folder (<code>list_files</code>), mencari pola kode (<code>search_code</code>), membaca baris spesifik (<code>read_file</code>), mengedit kode dengan <b>preview diff hijau/merah</b> (<code>edit_file</code>), dan menjalankan pengujian di terminal.</p>
+    </td>
+    <td width="50%">
+      <h3>🕒 Smart Session Cache (<code>/resume</code>)</h3>
+      <p>Percakapan tersimpan otomatis sehingga dapat dilanjutkan kapan saja via <code>/resume</code> atau <code>bidik -c</code>. Dilengkapi <b>auto-cleanup</b> (maksimal 20 sesi terakhir) agar penyimpanan tetap bersih &amp; ringan.</p>
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🧠 Arsitektur Kerja
+
+<div align="center">
+  <img src="assets/architecture.svg" alt="Bidik CLI Architecture Flow" width="96%" />
+</div>
+
+> [!TIP]
+> **Sangat Hemat Memori:** Seluruh komputasi model LLM dijalankan 100% di server `9router`. Saat `bidik` ditutup (`/exit`), pemakaian RAM di laptop kembali **0 MB** tanpa ada *background daemon* yang membebani sistem.
 
 ---
 
 ## 📋 Prasyarat
 
-* **Python 3.10 atau lebih baru** (`python --version`) — *tidak memerlukan Node.js / npm*.
-* Terhubung ke jaringan LAN / VPN yang dapat mengakses server **`9router`** (default: `http://192.168.6.217:20128/v1`).
+* **Python 3.10 atau lebih baru** (`python --version`) — *murni menggunakan Python, tidak memerlukan Node.js / `npm`*.
+* Terhubung ke jaringan LAN kantor atau VPN yang dapat mengakses server **`9router`**.
 
 ---
 
 ## 🚀 Cara Instalasi
 
-### Opsi 1: Auto-Installer Windows (`install.bat` — Paling Mudah)
+### Metode 1 — *One-Click Installer* Windows (`install.bat`) ⭐ *Paling Mudah*
 
-1. Clone repository ini atau ekstrak paket `.zip`:
+1. **Clone** repositori ini (atau ekstrak file `bidik-cli-installer.zip`):
    ```powershell
-   git clone https://github.com/<USERNAME_ANDA>/bidik-cli.git
-   cd bidik-cli
+   git clone https://github.com/YeQiu29/bidik-ai-cli.git
+   cd bidik-ai-cli
    ```
-2. Klik 2x file **`install.bat`** (atau jalankan `.\install.bat` di terminal).
-   * Installer otomatis membuat *virtual environment* terisolasi di `~/.bidik-cli/.venv` (aman, tidak mengganggu library Python sistem).
-   * Otomatis mendaftarkan perintah global `bidik` ke *User PATH* (tanpa *Run as Administrator*).
+2. Klik 2x file **`install.bat`** (atau jalankan `.\install.bat` di PowerShell):
+   * Otomatis menyalin program ke `~/.bidik-cli` dan membangun *isolated virtual environment* (`.venv`) agar **tidak menyentuh library Python global** laptop Anda.
+   * Otomatis mendaftarkan perintah `bidik` ke *User PATH* tanpa memerlukan *Run as Administrator*.
 3. Buka jendela terminal **baru**, lalu ketik:
    ```powershell
    bidik
    ```
 
-### Opsi 2: Install Langsung via `pip` dari GitHub (Windows / Linux / macOS)
+### Metode 2 — Install Langsung via `pip` dari GitHub (Windows / Linux / macOS)
 
 ```bash
-# Menggunakan virtual environment / pipx (direkomendasikan)
-pip install git+https://github.com/<USERNAME_ANDA>/bidik-cli.git
+pip install git+https://github.com/YeQiu29/bidik-ai-cli.git
 ```
 
 ---
 
-## 💻 Cara Penggunaan
+## 💻 Cara Penggunaan Cepat
 
-Masuk ke folder proyek kodingan mana saja, lalu jalankan:
+Buka terminal di folder proyek kodingan mana saja:
 
 ```powershell
-# Masuk ke mode interaktif (TUI)
+# Masuk ke mode interaktif penuh (TUI)
 bidik
 
-# Melanjutkan sesi percakapan terakhir di folder proyek ini
+# Langsung melanjutkan sesi percakapan terakhir di proyek ini
 bidik -c
 
-# Memilih dari daftar sesi percakapan sebelumnya
+# Membuka daftar riwayat sesi sebelumnya saat masuk
 bidik -r
 
-# Menjalankan satu perintah cepat (one-shot)
-bidik "jelaskan struktur kode di proyek ini"
+# Mode perintah kilat satu baris (one-shot)
+bidik "jelaskan alur autentikasi pada folder ini"
 ```
 
-Saat pertama kali dijalankan, **Bidik CLI** akan menanyakan **URL Server `9router`** dan **API Key (`sk-...`)** Anda lalu menyimpannya secara lokal di `~/.bidik/config.json`.
+> [!IMPORTANT]
+> **Setup Pertama Kali:** Saat pertama kali membuka `bidik`, Anda cukup memasukkan alamat URL Server `9router` (tekan *Enter* untuk default) dan **API Key (`sk-...`)** satu kali saja. Konfigurasi akan tersimpan aman secara lokal di `~/.bidik/config.json`.
+
+---
+
+## 🎛️ Tiga Mode Eksekusi (`/mode`)
+
+| Mode | Ikon | Karakteristik |
+| :--- | :---: | :--- |
+| **Agent Mode** *(Default)* | `⚡ AGENT` | Membaca kode secara bebas & meminta izin konfirmasi sebelum menyimpan editan file atau menjalankan perintah PowerShell. |
+| **Plan / Diskusi Mode** | `🧭 PLAN` | **100% Read-Only.** Sangat aman untuk diskusi arsitektur, *code review*, dan analisis *bug* tanpa mengubah satu baris file pun. |
+| **Auto-Edit Mode** | `🚀 AUTO` | Langsung menerapkan perubahan file kode di dalam proyek kerja secara cepat (tetap meminta izin untuk eksekusi perintah terminal). |
 
 ---
 
 ## ⌨️ Daftar Slash Commands
 
-| Perintah | Fungsi |
+| Perintah | Kegunaan |
 | :--- | :--- |
-| `/model` | Buka pemilih model AI interaktif (*live* dari server `9router`) dengan fitur cari/filter |
-| `/resume` | Pilih & lanjutkan sesi obrolan sebelumnya (*auto-cleanup* maks 20 sesi) |
-| `/new` | Mulai sesi obrolan baru tanpa menghapus sesi sebelumnya |
-| `/mode` | Ubah mode kerja: **Agent**, **Plan** (*read-only*), atau **Auto** |
-| `/status` | Cek koneksi & latensi server `9router`, ukuran *cache* sesi, dan pemakaian token |
-| `/diff` | Tampilkan *diff* perubahan file pada sesi saat ini atau `git status` |
-| `/clear` | Bersihkan layar & reset percakapan saat ini |
-| `/compact` | Ringkas riwayat percakapan panjang agar hemat *context window* |
-| `/clean` | Hapus bersih seluruh file *cache* sesi obrolan di disk (`0 KB`) |
-| `/config` | Lihat atau ubah URL Server (`/config url ...`) & API Key (`/config key ...`) |
-| `/help` | Tampilkan panduan lengkap |
-| `/exit` | Keluar dari Bidik CLI |
+| `/model` | Membuka pemilih model AI interaktif (*live* dari server `9router`) dengan fitur pencarian & filter |
+| `/resume` | Memilih & melanjutkan sesi obrolan sebelumnya (*Smart Session Cache* maks 20 sesi) |
+| `/new` | Memulai sesi percakapan baru tanpa menghapus sesi yang sudah tersimpan |
+| `/mode` | Mengganti mode kerja antara `Agent`, `Plan`, atau `Auto` |
+| `/status` | Mengecek status koneksi & latensi server `9router`, ukuran *cache* sesi, serta total pemakaian token |
+| `/diff` | Menampilkan *unified diff* warna hijau/merah atas file yang diubah pada sesi ini atau `git status` |
+| `/clear` | Membersihkan layar terminal & mereset percakapan aktif |
+| `/compact` | Meringkas riwayat percakapan panjang untuk menghemat *context window* |
+| `/clean` | Menghapus bersih seluruh file *cache* riwayat sesi di disk (`0 KB`) |
+| `/config` | Melihat atau memperbarui URL Server (`/config url ...`) maupun API Key (`/config key ...`) |
+| `/help` | Menampilkan tabel panduan bantuan di dalam terminal |
+| `/exit` | Keluar dari Bidik CLI (atau tekan `Ctrl+D`) |
 
 ---
 
-## 🗑️ Cara Uninstall (Windows)
-
-Klik 2x file **`uninstall.bat`** (atau jalankan `%USERPROFILE%\.bidik-cli\uninstall.bat`) untuk menghapus lingkungan terisolasi beserta perintah `bidik` dari *User PATH* secara bersih.
-
----
-
-## 📂 Struktur Proyek
+<details>
+<summary><b>📂 Lihat Struktur Kode Proyek</b></summary>
+<br/>
 
 ```text
-bidik-cli/
+bidik-ai-cli/
+├── assets/
+│   ├── hero-banner.svg      # Animasi SVG header utama
+│   ├── terminal-demo.svg    # Animasi simulasi sesi terminal TUI
+│   └── architecture.svg     # Animasi aliran data Laptop <-> 9router
 ├── bidik_cli/
-│   ├── __init__.py      # Metadata versi aplikasi
-│   ├── main.py          # Entry point CLI & penanganan slash commands
-│   ├── config.py        # Manajemen konfigurasi (~/.bidik/config.json & .env)
-│   ├── client.py        # Klien OpenAI streaming & pengambilan model live 9router
-│   ├── ui.py            # Komponen TUI Rich, banner, diff viewer & selector interaktif
-│   ├── completer.py     # Autocomplete popup otomatis untuk '/' dan '@file'
-│   ├── sessions.py      # Smart session cache dengan auto-cleanup
-│   ├── agent.py         # Agentic loop multi-step & reasoning parser
-│   └── tools.py         # Local coding tools berbatas workspace
-├── install.bat          # One-click installer untuk Windows
-├── install.ps1          # Script PowerShell pendamping installer
-├── uninstall.bat        # One-click uninstaller bersih
-├── .env.example         # Contoh konfigurasi environment variable
-├── .gitignore           # Aturan file yang diabaikan Git
-└── pyproject.toml       # Definisi paket Python & entry point `bidik`
+│   ├── __init__.py          # Informasi versi paket
+│   ├── main.py              # Entry point CLI & router slash command
+│   ├── config.py            # Manajemen konfigurasi (~/.bidik/config.json & .env)
+│   ├── client.py            # Klien OpenAI streaming, parser <think> & katalog model
+│   ├── ui.py                # Desain TUI Rich, diff viewer & interactive pickers
+│   ├── completer.py         # Popup autocomplete otomatis untuk '/' dan '@file'
+│   ├── sessions.py          # Penyimpanan sesi pintar dengan auto-cleanup
+│   ├── agent.py             # Multi-step agentic loop & eksekusi tool berantai
+│   └── tools.py             # Local coding tools terproteksi di dalam workspace
+├── install.bat              # One-click installer untuk Windows
+├── install.ps1              # Script PowerShell otomatis pendamping installer
+├── uninstall.bat            # One-click uninstaller bersih
+├── .env.example             # Template konfigurasi environment variable
+├── .gitignore               # Filter file lokal agar repo tetap bersih
+└── pyproject.toml           # Definisi paket Python & registrasi perintah `bidik`
 ```
+
+</details>
+
+<details>
+<summary><b>🗑️ Cara Uninstall Bersih (Windows)</b></summary>
+<br/>
+
+Klik 2x file **`uninstall.bat`** (atau jalankan `%USERPROFILE%\.bidik-cli\uninstall.bat`). Script akan menghapus folder `.venv` terisolasi serta membersihkan *entry* `bidik` dari *User PATH* tanpa meninggalkan residu pada sistem Anda.
+
+</details>
+
+---
+
+<div align="center">
+  <sub>Dibangun dengan ❤️ menggunakan Python, Rich, Prompt Toolkit &amp; OpenAI SDK • Terhubung ke <b>9router LLM Gateway</b></sub>
+</div>

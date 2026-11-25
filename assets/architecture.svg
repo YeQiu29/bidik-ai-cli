@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 210" width="100%" height="100%">
+  <defs>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f5d4"/>
+      <stop offset="50%" stop-color="#00bbf9"/>
+      <stop offset="100%" stop-color="#9b5de5"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .box-title {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .box-sub {
+      font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: 12px;
+      fill: #94a3b8;
+    }
+    .flow-forward {
+      stroke-dasharray: 8 6;
+      animation: dashFwd 1.2s linear infinite;
+    }
+    .flow-back {
+      stroke-dasharray: 8 6;
+      animation: dashBwd 1.2s linear infinite;
+    }
+    @keyframes dashFwd {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes dashBwd {
+      to { stroke-dashoffset: 28; }
+    }
+  </style>
+
+  <rect width="920" height="210" rx="14" fill="#0b0f19" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Left Card: Laptop Lokal -->
+  <rect x="30" y="30" width="290" height="150" rx="12" fill="#111827" stroke="#00f5d4" stroke-width="1.5"/>
+  <text x="175" y="62" text-anchor="middle" class="box-title" fill="#00f5d4">💻 Laptop Lokal (Bidik CLI)</text>
+  <text x="175" y="88" text-anchor="middle" class="box-sub">• Interactive TUI (/model, /resume)</text>
+  <text x="175" y="110" text-anchor="middle" class="box-sub">• Read / Edit File + Diff Viewer</text>
+  <text x="175" y="132" text-anchor="middle" class="box-sub">• Search Code &amp; PowerShell Runner</text>
+  <text x="175" y="156" text-anchor="middle" class="box-sub" fill="#34d399">RAM Ringan (~40MB) • Isolated .venv</text>
+
+  <!-- Animated Bidirectional Connection -->
+  <line x1="325" y1="88" x2="595" y2="88" stroke="url(#lineGrad)" stroke-width="2.5" class="flow-forward"/>
+  <text x="460" y="76" text-anchor="middle" class="box-sub" fill="#38bdf8">Prompt + Konteks @file ──►</text>
+
+  <line x1="325" y1="128" x2="595" y2="128" stroke="url(#lineGrad)" stroke-width="2.5" class="flow-back"/>
+  <text x="460" y="150" text-anchor="middle" class="box-sub" fill="#a78bfa">◄── Stream Reasoning &amp; Tool Calls</text>
+
+  <!-- Moving Glowing Data Dots -->
+  <circle r="4.5" cy="88" fill="#00f5d4">
+    <animate attributeName="cx" values="330;590" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle r="4.5" cy="128" fill="#9b5de5">
+    <animate attributeName="cx" values="590;330" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Right Card: 9router Server -->
+  <rect x="600" y="30" width="290" height="150" rx="12" fill="#111827" stroke="#9b5de5" stroke-width="1.5"/>
+  <text x="745" y="62" text-anchor="middle" class="box-title" fill="#c084fc">🖥️ Server AI (9router Gateway)</text>
+  <text x="745" y="88" text-anchor="middle" class="box-sub">• Endpoint /v1/models &amp; /v1/chat</text>
+  <text x="745" y="110" text-anchor="middle" class="box-sub">• ⭐ Combo Fallback (bidik_ai)</text>
+  <text x="745" y="132" text-anchor="middle" class="box-sub">• 🚀 Antigravity • ✨ Gemini • ⚡ OC</text>
+  <text x="745" y="156" text-anchor="middle" class="box-sub" fill="#38bdf8">100% Beban Komputasi AI di Server</text>
+</svg>
