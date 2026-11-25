@@ -22,6 +22,7 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/clear", "Bersihkan layar & reset percakapan saat ini"),
     ("/compact", "Ringkas konteks percakapan panjang agar hemat token"),
     ("/clean", "Hapus bersih seluruh cache riwayat sesi obrolan"),
+    ("/update", "Periksa & unduh pembaruan terbaru Bidik CLI dari GitHub"),
     ("/config", "Tampilkan atau ubah URL server 9router & API key"),
     ("/help", "Tampilkan panduan lengkap penggunaan Bidik CLI"),
     ("/exit", "Keluar dari Bidik CLI"),

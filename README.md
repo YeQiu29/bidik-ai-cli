@@ -151,7 +151,8 @@ bidik "jelaskan alur autentikasi pada folder ini"
 | `/clear` | Membersihkan layar terminal & mereset percakapan aktif |
 | `/compact` | Meringkas riwayat percakapan panjang untuk menghemat *context window* |
 | `/clean` | Menghapus bersih seluruh file *cache* riwayat sesi di disk (`0 KB`) |
-| `/config` | Melihat atau memperbarui URL Server (`/config url ...`) maupun API Key (`/config key ...`) |
+| `/update` | Memeriksa & mengunduh pembaruan terbaru Bidik CLI langsung dari GitHub |
+| `/config` | Melihat atau memperbarui URL Server (`/config url ...`), API Key, & GitHub Token |
 | `/help` | Menampilkan tabel panduan bantuan di dalam terminal |
 | `/exit` | Keluar dari Bidik CLI (atau tekan `Ctrl+D`) |
 

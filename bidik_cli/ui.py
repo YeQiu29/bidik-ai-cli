@@ -151,7 +151,8 @@ def render_help() -> None:
     table.add_row("/clear", "Bersihkan layar percakapan saat ini")
     table.add_row("/compact", "Ringkas riwayat percakapan panjang agar hemat kuota konteks")
     table.add_row("/clean", "Hapus bersih semua file cache sesi obrolan di disk (0 KB)")
-    table.add_row("/config", "Lihat atau ubah alamat API Base & API Key server 9router")
+    table.add_row("/update", "Tarik & pasang update terbaru Bidik CLI langsung dari GitHub")
+    table.add_row("/config", "Lihat atau ubah alamat API Base, API Key 9router, & GitHub Token")
     table.add_row("/exit", "Keluar dari Bidik CLI (bisa juga Ctrl+D)")
     table.add_row("@namafile", "Sertakan isi file proyek secara langsung, misal: 'perbaiki bug di @app.py'")
 

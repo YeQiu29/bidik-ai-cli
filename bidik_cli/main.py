@@ -20,6 +20,7 @@ from .agent import BidikAgent
 from .client import BidikClient
 from .completer import BidikCompleter
 from .config import BidikConfig, get_data_dir, get_history_file
+from .updater import check_for_updates, perform_update
 from .ui import (
     MODE_BADGES,
     PROMPT_STYLE,
@@ -48,6 +49,7 @@ STANDALONE_SLASH = {
     "/clear",
     "/compact",
     "/clean",
+    "/update",
     "/config",
     "/help",
     "/exit",
@@ -390,15 +392,44 @@ def _handle_slash_command(
         console.print("  [dim]Belum ada perubahan file pada sesi ini.[/dim]")
         return True
 
-    if cmd == "/config":
-        if not arg:
+    if cmd == "/update":
+        with console.status(
+            "[bold #00bbf9]Memeriksa & mengunduh pembaruan terbaru dari GitHub...[/bold #00bbf9]",
+            spinner="dots",
+        ):
+            ok, message = perform_update(config)
+        if ok:
             console.print(
                 Panel(
-                    f"[bold #7aa2f7]File Config:[/bold #7aa2f7] {get_data_dir() / 'config.json'}\n"
-                    f"[bold #7aa2f7]API Base   :[/bold #7aa2f7] {config.api_base}\n"
-                    f"[bold #7aa2f7]API Key    :[/bold #7aa2f7] {config.api_key[:10]}...{config.api_key[-4:]}\n"
-                    f"[bold #7aa2f7]Model      :[/bold #7aa2f7] {config.model}\n\n"
-                    "[dim]Ubah cepat: `/config url http://192.168.6.217:20128/v1` atau `/config key sk-...`[/dim]",
+                    f"[bold #00f5d4]✔ {message}[/bold #00f5d4]",
+                    title="[bold #00f5d4]🚀 Update Berhasil[/bold #00f5d4]",
+                    border_style="#00f5d4",
+                    box=box.ROUNDED,
+                )
+            )
+        else:
+            console.print(f"  [bold #ff6b6b]✖ Update gagal:[/bold #ff6b6b] {message}")
+        return True
+
+    if cmd == "/config":
+        if not arg:
+            gh_state = "Tersimpan (Private Repo siap)" if config.github_token else "Kosong (Mode Public Repo)"
+            masked_key = (
+                f"{config.api_key[:10]}...{config.api_key[-4:]}"
+                if len(config.api_key) > 14
+                else ("(belum diisi)" if not config.api_key else "***")
+            )
+            console.print(
+                Panel(
+                    f"[bold #7aa2f7]File Config  :[/bold #7aa2f7] {get_data_dir() / 'config.json'}\n"
+                    f"[bold #7aa2f7]API Base     :[/bold #7aa2f7] {config.api_base}\n"
+                    f"[bold #7aa2f7]API Key      :[/bold #7aa2f7] {masked_key}\n"
+                    f"[bold #7aa2f7]Model Aktif  :[/bold #7aa2f7] {config.model}\n"
+                    f"[bold #7aa2f7]GitHub Token :[/bold #7aa2f7] {gh_state}\n\n"
+                    "[dim]Ubah cepat:\n"
+                    "• `/config url http://192.168.6.217:20128/v1`\n"
+                    "• `/config key <API_KEY_9ROUTER>`\n"
+                    "• `/config github_token <TOKEN>` (opsional jika repo GitHub diubah ke Private)[/dim]",
                     title="[bold #00f5d4]⚙ Konfigurasi Bidik CLI[/bold #00f5d4]",
                     border_style="#7b61ff",
                     box=box.ROUNDED,
@@ -415,8 +446,15 @@ def _handle_slash_command(
             config.api_key = sub[1].strip()
             config.save()
             console.print("  [bold #00f5d4]✔ API Key berhasil diperbarui.[/bold #00f5d4]")
+        elif len(sub) == 2 and sub[0].lower() == "github_token":
+            tok = sub[1].strip()
+            config.github_token = "" if tok.lower() in ("clear", "none", "hapus") else tok
+            config.save()
+            console.print("  [bold #00f5d4]✔ GitHub Token berhasil diperbarui.[/bold #00f5d4]")
         else:
-            console.print("  [yellow]Format: `/config url <URL>` atau `/config key <API_KEY>`[/yellow]")
+            console.print(
+                "  [yellow]Format: `/config url <URL>`, `/config key <API_KEY>`, atau `/config github_token <TOKEN>`[/yellow]"
+            )
         return True
 
     console.print(
@@ -475,11 +513,27 @@ def main() -> None:
         help="Buka menu pemilih sesi obrolan sebelumnya saat masuk",
     )
     parser.add_argument(
+        "-u",
+        "--update",
+        action="store_true",
+        help="Perbarui Bidik CLI langsung dari GitHub lalu keluar",
+    )
+    parser.add_argument(
         "-v", "--version", action="version", version=f"Bidik CLI v{__version__}"
     )
     args = parser.parse_args()
 
     config = BidikConfig.load()
+    if args.update:
+        with console.status(
+            "[bold #00bbf9]Memeriksa & mengunduh pembaruan terbaru dari GitHub...[/bold #00bbf9]",
+            spinner="dots",
+        ):
+            ok, msg = perform_update(config)
+        style = "bold #00f5d4" if ok else "bold #ff6b6b"
+        icon = "✔" if ok else "✖"
+        console.print(f"  [{style}]{icon} {msg}[/{style}]")
+        return
     if args.model:
         config.model = args.model
     if args.mode:
@@ -530,6 +584,22 @@ def main() -> None:
 
     status = client.check_status(timeout=4.0)
     render_banner(status=status, config=config, workspace=workspace)
+
+    upd = check_for_updates(config=config, timeout=2.0)
+    if upd.has_update:
+        short_sha = upd.latest_sha[:7] if upd.latest_sha else "baru"
+        note = f" — {upd.latest_message}" if upd.latest_message else ""
+        console.print(
+            Panel(
+                f"[bold #fee440]🔔 Pembaruan Bidik CLI tersedia di GitHub![/bold #fee440] "
+                f"[dim](`{short_sha}`{note})[/dim]\n"
+                "Ketik [bold #00f5d4]/update[/bold #00f5d4] untuk memperbarui otomatis dalam hitungan detik tanpa menghapus konfigurasi Anda.",
+                border_style="#fee440",
+                box=box.ROUNDED,
+                padding=(0, 2),
+            )
+        )
+        console.print()
 
     if args.continue_last:
         sessions = agent.session_manager.list_sessions(workspace)

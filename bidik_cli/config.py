@@ -89,6 +89,7 @@ class BidikConfig:
     max_steps: int = 25
     timeout: float = 120.0
     show_reasoning: bool = True
+    github_token: str = ""
     trusted_workspaces: list[str] = field(default_factory=list)
 
     @classmethod
