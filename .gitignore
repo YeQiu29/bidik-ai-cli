@@ -1,0 +1,32 @@
+# Virtual Environment (JANGAN diupload ke GitHub)
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Konfigurasi rahasia & session cache lokal
+.env
+.bidik_data/
+.bidik_sessions.json
+.bidik_history.txt
+config.local.json
+
+# File paket installer lokal (.zip untuk dibagikan manual)
+*.zip
+
+# IDE & OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

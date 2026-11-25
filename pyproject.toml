@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bidik-cli"
+version = "1.0.0"
+description = "Bidik CLI - Agentic AI Coding Assistant powered by 9router"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.50.0",
+    "rich>=13.7.0",
+    "prompt_toolkit>=3.0.47",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+bidik = "bidik_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bidik_cli*"]
