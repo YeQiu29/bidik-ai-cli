@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 Write-Host ""
 Write-Host "  ======================================================" -ForegroundColor Cyan
 Write-Host "         BIDIK CLI v1.0.0 - AUTO INSTALLER              " -ForegroundColor Cyan
-Write-Host "     Agentic AI Coding Assistant (9router Gateway)      " -ForegroundColor DarkCyan
+Write-Host "    Powered By Dennis Hilmansyah - Agentic Coding CLI   " -ForegroundColor DarkCyan
 Write-Host "  ======================================================" -ForegroundColor Cyan
 Write-Host ""
 

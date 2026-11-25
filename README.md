@@ -198,5 +198,5 @@ Klik 2x file **`uninstall.bat`** (atau jalankan `%USERPROFILE%\.bidik-cli\uninst
 ---
 
 <div align="center">
-  <sub>Dibangun dengan ❤️ menggunakan Python, Rich, Prompt Toolkit &amp; OpenAI SDK • Terhubung ke <b>9router LLM Gateway</b></sub>
+  <sub>Powered By <b>Dennis Hilmansyah</b> • Dibangun dengan Python, Rich, Prompt Toolkit &amp; OpenAI SDK</sub>
 </div>

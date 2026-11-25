@@ -87,8 +87,8 @@ def render_banner(status: ServerStatus, config: BidikConfig, workspace: Path) ->
 
     subtitle = Text("  Agentic AI Coding Assistant ", style="bold white")
     subtitle.append(f"v{__version__}", style="dim cyan")
-    subtitle.append(" • Powered by ", style="dim")
-    subtitle.append("9router LLM Gateway", style="bold #9b5de5")
+    subtitle.append(" • Powered By ", style="dim")
+    subtitle.append("Dennis Hilmansyah", style="bold #9b5de5")
     console.print(subtitle)
     console.print()
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bidik-cli"
 version = "1.0.0"
-description = "Bidik CLI - Agentic AI Coding Assistant powered by 9router"
+description = "Bidik CLI - Agentic AI Coding Assistant | Powered By Dennis Hilmansyah"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

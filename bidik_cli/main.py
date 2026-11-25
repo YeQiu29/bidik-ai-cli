@@ -448,7 +448,7 @@ def _render_resumed_summary(loaded: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="bidik",
-        description="Bidik CLI - Agentic AI Coding Assistant (9router)",
+        description="Bidik CLI - Agentic AI Coding Assistant (Powered By Dennis Hilmansyah)",
     )
     parser.add_argument(
         "prompt",
